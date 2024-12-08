@@ -123,11 +123,10 @@
 	const handleCopy = async () => {
 		if (!link) {
 			link = clipboard;
-			key = '';
 		}
 
 		try {
-			const short = await shorten(link);
+			const short = await shorten(link, key);
 			const url = new URL(short);
 			key = url.pathname.replace(/^\//, '');
 			await navigator.clipboard.writeText(url.href);

@@ -1,20 +1,16 @@
-use std::{env, net::SocketAddr};
-
-use api::{api_create_url, api_visit_url, OpenApiSchema};
 use axum::{
     extract::MatchedPath,
     http::{Request, StatusCode},
     response::IntoResponse,
-    routing::{get, post},
     Json, Router,
 };
 use serde_json::json;
 use sqlx::SqlitePool;
+use std::{env, net::SocketAddr};
 use tokio::net::TcpListener;
 use tower_http::trace::TraceLayer;
 use tracing::info_span;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use utoipa::OpenApi;
 
 mod api;
 mod app;
@@ -69,13 +65,8 @@ async fn main() {
     sqlx::migrate!("./src/").run(&conn).await.unwrap();
 
     let app = Router::new()
-        .route(
-            "/.well-known/openapi.json",
-            get(|| async { Json(OpenApiSchema::openapi()) }),
-        )
-        .nest("/app", app::app_impl::app())
-        .route("/", post(api_create_url))
-        .route("/:key", get(api_visit_url))
+        .nest("/app", app::App::new())
+        .nest("/", api::Api::new())
         .layer(
             TraceLayer::new_for_http().make_span_with(|request: &Request<_>| {
                 let matched_path = request

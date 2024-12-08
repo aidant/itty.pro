@@ -4,20 +4,16 @@ use axum::{
     extract::{ConnectInfo, Host, Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
-    Json,
+    routing::{get, post},
+    Json, Router,
 };
-use axum_extra::{headers::UserAgent, TypedHeader};
+use axum_extra::{extract::OptionalPath, headers::UserAgent, TypedHeader};
 use nanoid::nanoid;
 use serde::Serialize;
 use serde_json::json;
 use url::Url;
 use utoipa::{OpenApi, ToSchema};
 use uuid::Uuid;
-
-const ALPHABET: [char; 32] = [
-    'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'j', 'k', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u',
-    'v', 'w', 'x', 'y', 'z', '2', '3', '4', '5', '6', '7', '8', '9',
-];
 
 use crate::{util::uuid_to_ms, AppError, AppState};
 
@@ -43,10 +39,15 @@ pub struct CreateUrlResponse {
 pub async fn api_create_url(
     State(state): State<AppState>,
     Host(host): Host,
+    OptionalPath(path): OptionalPath<String>,
     payload: String,
 ) -> Result<Response, AppError> {
     let id = Uuid::now_v7();
-    let key = nanoid!(8);
+    let key = if let Some(path) = path {
+        path
+    } else {
+        nanoid!(8)
+    };
     let now_ms = uuid_to_ms(&id)?;
 
     let url_string = match Url::parse(&payload) {
@@ -128,5 +129,20 @@ pub async fn api_visit_url(
         Ok((StatusCode::TEMPORARY_REDIRECT, [("Location", row.url)]).into_response())
     } else {
         Ok((StatusCode::NOT_FOUND).into_response())
+    }
+}
+
+pub struct Api {}
+
+impl Api {
+    pub fn new() -> Router<AppState> {
+        Router::new()
+            .route(
+                "/.well-known/openapi.json",
+                get(|| async { Json(OpenApiSchema::openapi()) }),
+            )
+            .route("/", post(api_create_url))
+            .route("/:key", post(api_create_url))
+            .route("/:key", get(api_visit_url))
     }
 }

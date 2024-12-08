@@ -1,16 +1,22 @@
+pub struct App {}
+
 #[cfg(not(feature = "include_app"))]
 pub mod app_impl {
+    use super::*;
+    use crate::AppState;
     use axum::Router;
 
-    use crate::AppState;
-
-    pub fn app() -> Router<AppState> {
-        Router::new()
+    impl App {
+        pub fn new() -> Router<AppState> {
+            Router::new()
+        }
     }
 }
 
 #[cfg(feature = "include_app")]
 pub mod app_impl {
+    use super::*;
+    use crate::AppState;
     use axum::{
         extract::Path,
         http::{header, StatusCode},
@@ -19,8 +25,6 @@ pub mod app_impl {
         Router,
     };
     use include_dir::{include_dir, Dir};
-
-    use crate::AppState;
 
     static APP: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/../app/build/");
 
@@ -43,12 +47,14 @@ pub mod app_impl {
         )
     }
 
-    pub fn app() -> Router<AppState> {
-        Router::new()
-            .route("/", get(|| async { serve("index.html") }))
-            .route(
-                "/*path",
-                get(|Path(path): Path<String>| async move { serve(&path) }),
-            )
+    impl App {
+        pub fn new() -> Router<AppState> {
+            Router::new()
+                .route("/", get(|| async { serve("index.html") }))
+                .route(
+                    "/*path",
+                    get(|Path(path): Path<String>| async move { serve(&path) }),
+                )
+        }
     }
 }

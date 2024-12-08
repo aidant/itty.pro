@@ -1,5 +1,5 @@
-export const shorten = async (url: string): Promise<string> => {
-	const response = await fetch('/', { method: 'POST', body: url });
+export const shorten = async (url: string, key?: string): Promise<string> => {
+	const response = await fetch(`/${key || ''}`, { method: 'POST', body: url });
 
 	if (response.ok) {
 		return response.text();
