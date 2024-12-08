@@ -46,7 +46,7 @@ pub async fn api_create_url(
     payload: String,
 ) -> Result<Response, AppError> {
     let id = Uuid::now_v7();
-    let key = nanoid!(8, &ALPHABET);
+    let key = nanoid!(8);
     let now_ms = uuid_to_ms(&id)?;
 
     let url_string = match Url::parse(&payload) {

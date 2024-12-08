@@ -1,7 +1,7 @@
-create table url (
+create table if not exists url (
     id blob not null,
 
-    key text not null,
+    key text not null unique,
     url text not null,
 
     created_at integer not null,
@@ -9,4 +9,4 @@ create table url (
 
     primary key (id)
 ) strict;
-create index url_key on url (key);
+create index if not exists url_key on url (key);

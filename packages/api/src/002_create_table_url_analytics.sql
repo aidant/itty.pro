@@ -1,4 +1,4 @@
-create table url_analytics (
+create table if not exists url_analytics (
     id blob not null,
     url_id blob not null,
 
@@ -10,4 +10,4 @@ create table url_analytics (
 
     primary key (id),
     foreign key (url_id) references url(id) on delete cascade on update cascade
-) strict
+) strict;

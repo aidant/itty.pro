@@ -7,7 +7,8 @@
 		"build": "vite build"
 	},
 	"devDependencies": {
-		"@fontsource-variable/bricolage-grotesque": "^5.1.0",
+		"@fontsource/atkinson-hyperlegible": "^5.1.0",
+		"@fontsource-variable/playfair-display": "^5.1.0",
 		"@sveltejs/adapter-static": "^3.0.6",
 		"@sveltejs/kit": "^2.9.0",
 		"@sveltejs/vite-plugin-svelte": "^5.0.0",
