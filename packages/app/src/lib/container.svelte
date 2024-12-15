@@ -7,7 +7,7 @@
 >
 	{#if title}
 		<div
-			class="w-full rounded-t-lg border-b-2 border-rose-300/50 bg-white/75 px-6 py-3 text-center text-lg"
+			class="w-full rounded-t-lg border-b-2 border-rose-300/50 bg-white/50 px-6 py-3 text-center text-lg font-bold"
 		>
 			{@render title()}
 		</div>

@@ -41,7 +41,7 @@
 			/>
 		{/if}
 		{#if action}
-			<button class="cursor-pointer text-rose-700 hover:text-rose-800" onclick={() => onaction()}>
+			<button class="cursor-pointer text-rose-900 hover:text-rose-950" onclick={() => onaction()}>
 				{@render action()}
 			</button>
 		{/if}
