@@ -1,6 +1,6 @@
 pub struct App {}
 
-#[cfg(not(feature = "include_app"))]
+#[cfg(not(any(feature = "app_external", feature = "app_internal")))]
 pub mod app_impl {
     use super::*;
     use crate::AppState;
@@ -13,7 +13,53 @@ pub mod app_impl {
     }
 }
 
-#[cfg(feature = "include_app")]
+#[cfg(feature = "app_external")]
+pub mod api_impl {
+    use super::*;
+    use crate::AppState;
+    use axum::{
+        extract::Path,
+        http::{self, header},
+        response::{IntoResponse, Response},
+        routing::get,
+        Router,
+    };
+    use hyper::StatusCode;
+
+    async fn serve(path: &str) -> Response {
+        reqwest::get(format!("http://localhost:5173/app/{}", path))
+            .await
+            .map(|response| Into::<http::Response<_>>::into(response).into_response())
+            .unwrap_or_else(|error| {
+                println!("{:?}", error);
+
+                (StatusCode::INTERNAL_SERVER_ERROR).into_response()
+            })
+    }
+
+    impl App {
+        pub fn new() -> Router<AppState> {
+            Router::new()
+                .route(
+                    "/app",
+                    get(|| async {
+                        (
+                            StatusCode::TEMPORARY_REDIRECT,
+                            [(header::LOCATION, "/app/")],
+                        )
+                            .into_response()
+                    }),
+                )
+                .route("/app/", get(|| async { serve("").await }))
+                .route(
+                    "/app/*path",
+                    get(|Path(path): Path<String>| async move { serve(&path).await }),
+                )
+        }
+    }
+}
+
+#[cfg(feature = "app_internal")]
 pub mod app_impl {
     use super::*;
     use crate::AppState;
@@ -50,9 +96,19 @@ pub mod app_impl {
     impl App {
         pub fn new() -> Router<AppState> {
             Router::new()
-                .route("/", get(|| async { serve("index.html") }))
                 .route(
-                    "/*path",
+                    "/app",
+                    get(|| async {
+                        (
+                            StatusCode::TEMPORARY_REDIRECT,
+                            [(header::LOCATION, "/app/")],
+                        )
+                            .into_response()
+                    }),
+                )
+                .route("/app/", get(|| async { serve("index.html") }))
+                .route(
+                    "/app/*path",
                     get(|Path(path): Path<String>| async move { serve(&path) }),
                 )
         }

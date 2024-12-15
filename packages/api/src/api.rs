@@ -55,9 +55,9 @@ pub async fn api_create_url(
         Err(error) => {
             return Ok((
                 StatusCode::UNPROCESSABLE_ENTITY,
-                Json(json!({ "error": format!(r#"Unable to parse provided url "{payload}" due to the following error: {error}"#) })),
+                Json(json!({ "error": error.to_string() })),
             )
-                .into_response())
+                .into_response());
         }
     };
 
@@ -76,7 +76,7 @@ pub async fn api_create_url(
 
     Ok((
         StatusCode::CREATED,
-        Url::parse(&format!("http://{host}/{key}"))?.to_string(),
+        Url::parse(&format!("https://{host}:3000/{key}"))?.to_string(),
     )
         .into_response())
 }

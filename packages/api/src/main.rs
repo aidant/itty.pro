@@ -4,23 +4,11 @@ use axum::{
     response::IntoResponse,
     Json, Router,
 };
-use hyper::body::Incoming;
-use hyper_util::rt::{TokioExecutor, TokioIo};
 use serde_json::json;
 use sqlx::SqlitePool;
-use std::{env, net::SocketAddr, path::PathBuf, sync::Arc};
-use tokio::io::AsyncWriteExt;
+use std::{env, net::SocketAddr};
 use tokio::net::TcpListener;
-use tokio_rustls::{
-    rustls::{
-        pki_types::{pem::PemObject, CertificateDer, PrivateKeyDer},
-        server::{Acceptor, ClientHello},
-        ServerConfig,
-    },
-    LazyConfigAcceptor,
-};
 use tower_http::trace::TraceLayer;
-use tower_service::Service;
 use tracing::info_span;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use util_https::serve_https;
@@ -79,7 +67,7 @@ async fn main() {
     sqlx::migrate!("./src/").run(&conn).await.unwrap();
 
     let app = Router::new()
-        .nest("/app", app::App::new())
+        .nest("/", app::App::new())
         .nest("/", api::Api::new())
         .layer(
             TraceLayer::new_for_http().make_span_with(|request: &Request<_>| {

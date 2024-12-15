@@ -18,3 +18,22 @@
 			'Liberation Mono', 'Courier New', monospace;
 	}
 }
+
+html {
+	/* prettier-ignore */
+	background-image:
+		linear-gradient(90deg, var(--color-rose-50) 1px, transparent 1px),
+		linear-gradient(var(--color-rose-50) 1px, transparent 1px);
+	background-size: 1rem 1rem;
+}
+
+html::before {
+	mask-image: radial-gradient(75% 100% at 50% 0, black 70%, transparent);
+
+	/* prettier-ignore */
+	background-image:
+		radial-gradient(75% 50% at 25% 75%, var(--color-orange-300) 0%, transparent 100%),
+		radial-gradient(25% 50% at 100% 75%, var(--color-fuchsia-500) 10%, transparent 100%),
+		radial-gradient(75% 75% at 50% 25%, var(--color-rose-300) 25%, transparent 100%),
+		linear-gradient(125deg, var(--color-pink-400) 0%, transparent 100%);
+}
