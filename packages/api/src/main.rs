@@ -2,7 +2,7 @@ use axum::{
     extract::MatchedPath,
     http::{Request, StatusCode},
     response::IntoResponse,
-    Json, Router,
+    Json,
 };
 use serde_json::json;
 use sqlx::SqlitePool;
@@ -13,8 +13,7 @@ use tracing::info_span;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use util_https::{serve_http, serve_https, InsecureCertificateResolver};
 
-mod api;
-mod app;
+mod routes;
 mod util;
 mod util_auth;
 mod util_https;
@@ -69,35 +68,28 @@ async fn main() {
 
     let app_state = AppState { conn };
 
-    let http_app = api::Insecure::new().with_state(app_state.clone());
-
-    let http_listener = TcpListener::bind("127.0.0.1:8080").await.unwrap();
-
-    let https_app = Router::new()
-        .nest("/", app::App::new())
-        .nest("/", api::Api::new())
-        .layer(
-            TraceLayer::new_for_http().make_span_with(|request: &Request<_>| {
-                let matched_path = request
-                    .extensions()
-                    .get::<MatchedPath>()
-                    .map(MatchedPath::as_str);
-
-                info_span!("http_request", method = ?request.method(), matched_path)
-            }),
-        )
-        .with_state(app_state);
-
-    let https_listener = TcpListener::bind("127.0.0.1:3000").await.unwrap();
-
     tokio::try_join!(
         serve_http(
-            http_listener,
-            http_app.into_make_service_with_connect_info::<SocketAddr>(),
+            TcpListener::bind("127.0.0.1:8080").await.unwrap(),
+            routes::AppRouter::http()
+                .with_state(app_state.clone())
+                .into_make_service_with_connect_info::<SocketAddr>(),
         ),
         serve_https(
-            https_listener,
-            https_app.into_make_service_with_connect_info::<SocketAddr>(),
+            TcpListener::bind("127.0.0.1:3000").await.unwrap(),
+            routes::AppRouter::https()
+                .layer(
+                    TraceLayer::new_for_http().make_span_with(|request: &Request<_>| {
+                        let matched_path = request
+                            .extensions()
+                            .get::<MatchedPath>()
+                            .map(MatchedPath::as_str);
+
+                        info_span!("http_request", method = ?request.method(), matched_path)
+                    }),
+                )
+                .with_state(app_state)
+                .into_make_service_with_connect_info::<SocketAddr>(),
             InsecureCertificateResolver::new(),
         )
     )
