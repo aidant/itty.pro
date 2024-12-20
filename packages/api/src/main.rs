@@ -9,6 +9,7 @@ use sqlx::SqlitePool;
 use std::{env, net::SocketAddr};
 use tokio::net::TcpListener;
 use tower_http::trace::TraceLayer;
+use tower_sessions::SessionManagerLayer;
 use tracing::info_span;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use util_https::{serve_http, serve_https, InsecureCertificateResolver};
@@ -17,8 +18,9 @@ mod routes;
 mod util;
 mod util_auth;
 mod util_https;
+mod util_session;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct AppState {
     pub conn: SqlitePool,
 }
@@ -68,6 +70,9 @@ async fn main() {
 
     let app_state = AppState { conn };
 
+    let session_layer = SessionManagerLayer::new(app_state.clone())
+        .with_same_site(tower_sessions::cookie::SameSite::None);
+
     tokio::try_join!(
         serve_http(
             TcpListener::bind("127.0.0.1:8080").await.unwrap(),
@@ -78,6 +83,7 @@ async fn main() {
         serve_https(
             TcpListener::bind("127.0.0.1:3000").await.unwrap(),
             routes::AppRouter::https()
+                .layer(session_layer)
                 .layer(
                     TraceLayer::new_for_http().make_span_with(|request: &Request<_>| {
                         let matched_path = request
