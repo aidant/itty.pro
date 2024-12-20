@@ -11,11 +11,12 @@ use tokio::net::TcpListener;
 use tower_http::trace::TraceLayer;
 use tracing::info_span;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use util_https::serve_https;
+use util_https::{serve_http, serve_https, InsecureCertificateResolver};
 
 mod api;
 mod app;
 mod util;
+mod util_auth;
 mod util_https;
 
 #[derive(Clone)]
@@ -66,7 +67,13 @@ async fn main() {
 
     sqlx::migrate!("./src/").run(&conn).await.unwrap();
 
-    let app = Router::new()
+    let app_state = AppState { conn };
+
+    let http_app = api::Insecure::new().with_state(app_state.clone());
+
+    let http_listener = TcpListener::bind("127.0.0.1:8080").await.unwrap();
+
+    let https_app = Router::new()
         .nest("/", app::App::new())
         .nest("/", api::Api::new())
         .layer(
@@ -79,14 +86,20 @@ async fn main() {
                 info_span!("http_request", method = ?request.method(), matched_path)
             }),
         )
-        .with_state(AppState { conn });
+        .with_state(app_state);
 
-    let listener = TcpListener::bind("127.0.0.1:3000").await.unwrap();
+    let https_listener = TcpListener::bind("127.0.0.1:3000").await.unwrap();
 
-    serve_https(
-        listener,
-        app.into_make_service_with_connect_info::<SocketAddr>(),
+    tokio::try_join!(
+        serve_http(
+            http_listener,
+            http_app.into_make_service_with_connect_info::<SocketAddr>(),
+        ),
+        serve_https(
+            https_listener,
+            https_app.into_make_service_with_connect_info::<SocketAddr>(),
+            InsecureCertificateResolver::new(),
+        )
     )
-    .await
     .unwrap();
 }

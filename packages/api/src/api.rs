@@ -1,9 +1,8 @@
-use std::net::SocketAddr;
-
+use anyhow::anyhow;
 use axum::{
     extract::{ConnectInfo, Host, Path, State},
-    http::StatusCode,
-    response::{IntoResponse, Response},
+    http::{StatusCode, Uri},
+    response::{IntoResponse, Redirect, Response},
     routing::{get, post},
     Json, Router,
 };
@@ -11,6 +10,8 @@ use axum_extra::{extract::OptionalPath, headers::UserAgent, TypedHeader};
 use nanoid::nanoid;
 use serde::Serialize;
 use serde_json::json;
+use std::net::SocketAddr;
+use tracing::error;
 use url::Url;
 use utoipa::{OpenApi, ToSchema};
 use uuid::Uuid;
@@ -144,5 +145,49 @@ impl Api {
             .route("/", post(api_create_url))
             .route("/:key", post(api_create_url))
             .route("/:key", get(api_visit_url))
+    }
+}
+
+pub struct Insecure {}
+
+fn http_to_https(host: String, uri: Uri) -> Result<String, anyhow::Error> {
+    let mut parts = uri.into_parts();
+
+    parts.scheme = Some(axum::http::uri::Scheme::HTTPS);
+
+    if parts.path_and_query.is_none() {
+        parts.path_and_query = Some("/".parse().unwrap());
+    }
+
+    parts.authority = Some(host.parse()?);
+
+    let mut url = Url::parse(&Uri::from_parts(parts)?.to_string())?;
+
+    url.set_scheme("https")
+        .map_err(|_| anyhow!("unable to set scheme"))?;
+    url.set_port(Some(3000))
+        .map_err(|_| anyhow!("unable to set port"))?;
+
+    Ok(url.to_string())
+}
+
+impl Insecure {
+    pub fn new() -> Router<AppState> {
+        Router::new()
+            .route(
+                "/.well-known/acme-challenge/:token",
+                get(|Path(token): Path<String>| async move {
+                    let token = token.replacen("/.well-known/acme-challenge/", "", 1);
+                }),
+            )
+            .fallback(|Host(host): Host, uri: Uri| async move {
+                match http_to_https(host, uri) {
+                    Ok(url) => Redirect::permanent(&url).into_response(),
+                    Err(err) => {
+                        error!("{:?}", err);
+                        (StatusCode::BAD_REQUEST).into_response()
+                    }
+                }
+            })
     }
 }

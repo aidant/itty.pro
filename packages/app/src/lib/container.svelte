@@ -3,7 +3,7 @@
 </script>
 
 <fieldset
-	class="bg-roze-50/25 w-full rounded-lg ring-2 shadow-sm shadow-rose-300/25 ring-rose-200/75 backdrop-blur-3xl"
+	class="bg-roze-50/25 w-full rounded-lg ring-2 shadow-sm shadow-rose-300/10 ring-rose-200/75 backdrop-blur-3xl"
 >
 	{#if title}
 		<div

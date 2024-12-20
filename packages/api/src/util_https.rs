@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use axum::{extract::connect_info::IntoMakeServiceWithConnectInfo, Router};
 use hyper_util::{
     rt::{TokioExecutor, TokioIo},
@@ -20,12 +21,30 @@ use tokio_rustls::{
 use tower_service::Service;
 use tracing::{error, trace};
 
+#[async_trait]
+pub trait CertificateResolver: Send + Sync + Copy + 'static {
+    type Error: std::fmt::Debug;
+
+    async fn resolve(
+        &self,
+        client_hello: &ClientHello<'_>,
+    ) -> Result<Arc<ServerConfig>, Self::Error>;
+}
+
 // https://github.com/rustls/tokio-rustls/blob/cd399aba544e01f08047b40a6988365c195d6076/src/lib.rs#L225-L250
 // https://github.com/tokio-rs/axum/blob/9983bc1da460becd3a0f08c513d610411e84dd43/axum/src/serve.rs#L225-L269
 
-pub async fn serve_https(
+pub async fn serve_http(
+    tcp_listener: TcpListener,
+    make_service: IntoMakeServiceWithConnectInfo<Router, SocketAddr>,
+) -> Result<(), anyhow::Error> {
+    Ok(axum::serve(tcp_listener, make_service).await?)
+}
+
+pub async fn serve_https<CR: CertificateResolver>(
     tcp_listener: TcpListener,
     mut make_service: IntoMakeServiceWithConnectInfo<Router, SocketAddr>,
+    certificate_resolver: CR,
 ) -> Result<(), anyhow::Error> {
     loop {
         let (tcp_stream, remote_addr) = match tcp_accept(&tcp_listener).await {
@@ -48,7 +67,7 @@ pub async fn serve_https(
                 let start = acceptor.as_mut().await?;
 
                 let client_hello = start.client_hello();
-                let config = get_server_config(client_hello).await;
+                let config = certificate_resolver.resolve(&client_hello).await.unwrap();
                 let tcp_stream = start.into_stream(config).await?;
 
                 trace!("connection {remote_addr} accepted");
@@ -102,26 +121,41 @@ async fn tcp_accept(listener: &TcpListener) -> Option<(TcpStream, SocketAddr)> {
     }
 }
 
-pub async fn get_server_config(client_hello: ClientHello<'_>) -> Arc<ServerConfig> {
-    let sni = client_hello.server_name();
+#[derive(Clone, Copy)]
+pub struct InsecureCertificateResolver {}
 
-    let mut config = ServerConfig::builder()
-        .with_no_client_auth()
-        .with_single_cert(
-            CertificateDer::pem_file_iter(
-                PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("localhost-cert.pem"),
+impl InsecureCertificateResolver {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
+#[async_trait]
+impl CertificateResolver for InsecureCertificateResolver {
+    type Error = anyhow::Error;
+
+    async fn resolve(
+        &self,
+        client_hello: &ClientHello<'_>,
+    ) -> Result<Arc<ServerConfig>, Self::Error> {
+        let mut config = ServerConfig::builder()
+            .with_no_client_auth()
+            .with_single_cert(
+                CertificateDer::pem_file_iter(
+                    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("localhost-cert.pem"),
+                )
+                .unwrap()
+                .map(|cert| cert.unwrap())
+                .collect(),
+                PrivateKeyDer::from_pem_file(
+                    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("localhost-key.pem"),
+                )
+                .unwrap(),
             )
-            .unwrap()
-            .map(|cert| cert.unwrap())
-            .collect(),
-            PrivateKeyDer::from_pem_file(
-                PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("localhost-key.pem"),
-            )
-            .unwrap(),
-        )
-        .unwrap();
+            .unwrap();
 
-    config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+        config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
 
-    Arc::new(config)
+        Ok(Arc::new(config))
+    }
 }

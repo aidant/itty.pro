@@ -17,7 +17,7 @@
 <label for={id} class="max-w-prose">
 	{title}
 	<div
-		class="mt-1 flex w-full flex-row justify-baseline rounded-lg border-2 border-rose-200/75 bg-white/75 px-3 py-2 inset-shadow-sm inset-shadow-rose-300/25 transition placeholder:text-rose-950/50 focus-within:border-rose-400 focus-within:ring-3 focus-within:ring-rose-400/25"
+		class="mt-1 flex w-full flex-row justify-baseline rounded-lg border-2 border-rose-200/75 bg-white/75 px-3 py-2 inset-shadow-sm inset-shadow-rose-300/10 transition placeholder:text-rose-950/50 focus-within:border-rose-400 focus-within:ring-3 focus-within:ring-rose-400/25"
 	>
 		{#if prefix}
 			<span class="inline-block">
