@@ -57,14 +57,14 @@
 
 <main class="flex flex-col">
 	<section
-		class="mx-auto flex h-96 max-w-xl flex-col justify-center gap-4 text-left md:max-w-2xl md:text-center lg:max-w-4xl lg:gap-6"
+		class="mx-auto flex h-96 max-w-xl flex-col justify-center gap-4 text-left md:max-w-2xl md:text-center"
 	>
 		<h2
-			class="font-serif text-4xl leading-10 font-bold text-balance md:text-6xl md:leading-14 lg:leading-18"
+			class="font-serif text-4xl sm:text-5xl sm:leading-13 leading-10 font-bold text-balance md:text-6xl md:leading-18"
 		>
 			A link shortener, built for everyone
 		</h2>
-		<p class="text-balance">
+		<p class="text-balance max-w-sm sm:max-w-md md:mx-auto md:max-w-xl lg:max-w-2xl">
 			Transform any long or short link into a branded, trackable, and secure snippet on your domain.
 			Streamline your user experience with our API by dynamically generating sharable trackable
 			links on the fly.

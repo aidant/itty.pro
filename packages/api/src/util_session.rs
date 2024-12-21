@@ -1,11 +1,10 @@
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use tower_sessions::{
     cookie::time::OffsetDateTime,
     session::{Id, Record},
     session_store, ExpiredDeletion, SessionStore,
 };
-use tracing::debug;
 
 use crate::AppState;
 

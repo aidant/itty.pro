@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use axum_login::{AuthUser, AuthnBackend, UserId};
 use chrono::{DateTime, Utc};
 use password_auth::verify_password;
+use serde::Deserialize;
 use tokio::task;
 use uuid::Uuid;
 
@@ -41,6 +42,7 @@ impl AuthUser for User {
     }
 }
 
+#[derive(Clone, Deserialize)]
 pub struct Credentials {
     pub email: String,
     pub password: String,

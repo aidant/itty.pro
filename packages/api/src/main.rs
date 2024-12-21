@@ -4,6 +4,7 @@ use axum::{
     response::IntoResponse,
     Json,
 };
+use axum_login::AuthManagerLayerBuilder;
 use serde_json::json;
 use sqlx::SqlitePool;
 use std::{env, net::SocketAddr};
@@ -73,6 +74,8 @@ async fn main() {
     let session_layer = SessionManagerLayer::new(app_state.clone())
         .with_same_site(tower_sessions::cookie::SameSite::None);
 
+    let auth_layer = AuthManagerLayerBuilder::new(app_state.clone(), session_layer).build();
+
     tokio::try_join!(
         serve_http(
             TcpListener::bind("127.0.0.1:8080").await.unwrap(),
@@ -83,7 +86,7 @@ async fn main() {
         serve_https(
             TcpListener::bind("127.0.0.1:3000").await.unwrap(),
             routes::AppRouter::https()
-                .layer(session_layer)
+                .layer(auth_layer)
                 .layer(
                     TraceLayer::new_for_http().make_span_with(|request: &Request<_>| {
                         let matched_path = request

@@ -7,6 +7,7 @@ use axum::{
     Json,
 };
 use axum_extra::{extract::OptionalPath, headers::UserAgent, TypedHeader};
+use axum_login::AuthSession;
 use nanoid::nanoid;
 use serde_json::json;
 use url::Url;
@@ -30,8 +31,16 @@ pub async fn post(
     State(state): State<AppState>,
     Host(host): Host,
     OptionalPath(path): OptionalPath<String>,
+    auth_session: AuthSession<AppState>,
     payload: String,
 ) -> Result<Response, AppError> {
+    let _user_id = match auth_session.user {
+        Some(user) => user.id,
+        None => {
+            return Ok((StatusCode::UNAUTHORIZED).into_response());
+        }
+    };
+
     let id = Uuid::now_v7();
     let key = path.unwrap_or_else(|| nanoid!(8));
     let now_ms = uuid_to_ms(&id)?;

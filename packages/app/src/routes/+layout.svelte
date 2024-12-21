@@ -8,7 +8,7 @@
 
 <header>
 	<nav
-		class="mx-auto flex w-full max-w-xl flex-row items-center justify-between py-4 md:max-w-2xl lg:max-w-4xl"
+		class="mx-auto flex w-full sm:max-w-xl flex-row items-center justify-between py-4 md:max-w-2xl lg:max-w-4xl"
 	>
 		<h1 class="text-2xl"><a href="/app/">itty</a></h1>
 
