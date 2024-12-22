@@ -19,26 +19,30 @@ fn serve(mut path: &str) -> Response {
         path = &"index.html"
     }
 
-    APP.get_file(path)
-        .or_else(|| APP.get_file(format!("{path}.html")))
-        .or_else(|| APP.get_file(format!("{path}/index.html")))
-        .or_else(|| APP.get_file("404.html"))
-        .map_or_else(
-            || (StatusCode::NOT_FOUND).into_response(),
-            |file| {
-                (
-                    StatusCode::OK,
-                    [(
-                        header::CONTENT_TYPE,
-                        mime_guess::from_path(&path)
-                            .first_or_octet_stream()
-                            .to_string(),
-                    )],
-                    file.contents(),
-                )
-                    .into_response()
-            },
-        )
+    [
+        path,
+        format!("{path}.html").as_str(),
+        format!("{path}/index.html").as_str(),
+        "404.html",
+    ]
+    .iter()
+    .find_map(|path| APP.get_file(path).map(|file| (*path, file)))
+    .map_or_else(
+        || (StatusCode::NOT_FOUND).into_response(),
+        |(path, file)| {
+            (
+                StatusCode::OK,
+                [(
+                    header::CONTENT_TYPE,
+                    mime_guess::from_path(path)
+                        .first_or_octet_stream()
+                        .to_string(),
+                )],
+                file.contents(),
+            )
+                .into_response()
+        },
+    )
 }
 
 pub fn router() -> Router<AppState> {
