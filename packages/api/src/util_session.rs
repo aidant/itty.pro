@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use chrono::Utc;
+use sqlx::SqliteConnection;
 use tower_sessions::{
     cookie::time::OffsetDateTime,
     session::{Id, Record},
@@ -29,15 +30,28 @@ impl ExpiredDeletion for AppState {
 }
 
 #[async_trait]
-impl SessionStore for AppState {
-    async fn create(&self, record: &mut Record) -> session_store::Result<()> {
+trait SessionStoreExt {
+    async fn try_create(
+        &self,
+        record: &Record,
+        conn: &mut SqliteConnection,
+    ) -> session_store::Result<bool>;
+}
+
+#[async_trait]
+impl SessionStoreExt for AppState {
+    async fn try_create(
+        &self,
+        record: &Record,
+        conn: &mut SqliteConnection,
+    ) -> session_store::Result<bool> {
         let id = record.id.to_string();
         let data = serde_json::to_string(&record.data)
             .map_err(|err| session_store::Error::Backend(err.to_string()))?;
         let now_ms = Utc::now().timestamp_millis();
         let exp_ms = (record.expiry_date.unix_timestamp_nanos() / 1000000) as i64;
 
-        sqlx::query!(
+        match sqlx::query!(
             r#"
                 insert or abort into session (id, data, created_at, updated_at, expires_at) values (?, JSONB(?), ?, ?, ?)
             "#,
@@ -47,9 +61,31 @@ impl SessionStore for AppState {
             now_ms,
             exp_ms
         )
-        .execute(&self.conn)
-        .await
-        .map_err(|err| session_store::Error::Backend(err.to_string()))?;
+        .execute(conn)
+        .await {
+            Ok(_) => Ok(true),
+            Err(sqlx::Error::Database(e)) if e.is_unique_violation() => Ok(false),
+            Err(err) => Err(session_store::Error::Backend(err.to_string())),
+        }
+    }
+}
+
+#[async_trait]
+impl SessionStore for AppState {
+    async fn create(&self, record: &mut Record) -> session_store::Result<()> {
+        let mut tx = self
+            .conn
+            .begin()
+            .await
+            .map_err(|err| session_store::Error::Backend(err.to_string()))?;
+
+        while !self.try_create(record, &mut tx).await? {
+            record.id = Id::default();
+        }
+
+        tx.commit()
+            .await
+            .map_err(|err| session_store::Error::Backend(err.to_string()))?;
 
         Ok(())
     }
