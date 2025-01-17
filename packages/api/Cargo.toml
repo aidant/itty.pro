@@ -14,7 +14,9 @@ async-trait = "0.1.83"
 axum = { version = "0.7.9", features = ["http2"] }
 axum-extra = { version = "0.9.6", features = ["typed-header"] }
 axum-login = "0.16.0"
+base64-url = "3.0.0"
 chrono = { version = "0.4.38", features = ["serde"] }
+getrandom = "0.2.15"
 hyper = { version = "1.5.1", features = ["full"] }
 hyper-util = { version = "0.1.10", features = ["full"] }
 include_dir = "0.7.4"
@@ -23,6 +25,7 @@ mime_guess = "2.0.5"
 nanoid = "0.4.0"
 password-auth = "1.0.0"
 reqwest = "0.12.9"
+resend-rs = "0.11.0"
 serde = { version = "1.0.215", features = ["derive"] }
 serde_json = "1.0.133"
 sqlx = { version = "0.8.2", features = ["chrono", "runtime-tokio", "sqlite", "uuid"] }
@@ -36,3 +39,4 @@ tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 url = { version = "2.5.4", features = ["serde"] }
 utoipa = { version = "5.2.0", features = ["axum_extras", "url"] }
 uuid = { version = "1.11.0", features = ["serde", "v7"] }
+veil = "0.2.0"

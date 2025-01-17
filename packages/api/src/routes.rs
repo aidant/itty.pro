@@ -1,22 +1,25 @@
-use axum::{
-    body::Body,
-    response::IntoResponse,
-    routing::{get, post},
-    Router,
+use {
+    crate::AppState,
+    axum::{
+        body::Body,
+        response::IntoResponse,
+        routing::{get, post},
+        Router,
+    },
+    hyper::{header, StatusCode},
+    serde::{Deserialize, Serialize},
+    tower_sessions::Session,
 };
-use hyper::{header, StatusCode};
-use serde::{Deserialize, Serialize};
-use tower_sessions::Session;
-
-use crate::AppState;
 
 mod api;
 mod app_external;
 mod app_internal;
 mod http_to_https_redirect;
+mod me;
 mod sign_in;
 mod sign_out;
 mod sign_up;
+mod sign_up_token;
 mod well_known_acme_challenge;
 mod well_known_openapi_json;
 
@@ -62,9 +65,11 @@ impl AppRouter {
                 "/.well-known/openapi.json",
                 get(well_known_openapi_json::get),
             )
+            .route("/api/@me", get(me::get))
             .route("/api/sign-in", post(sign_in::post))
             .route("/api/sign-out", post(sign_out::post))
             .route("/api/sign-up", post(sign_up::post))
+            .route("/api/sign-up/:token", post(sign_up_token::post))
             .route("/", post(api::post))
             .route("/:key", post(api::post))
             .route("/:key", get(api::get))

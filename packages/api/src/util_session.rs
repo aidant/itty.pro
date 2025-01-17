@@ -1,13 +1,14 @@
-use async_trait::async_trait;
-use chrono::Utc;
-use sqlx::SqliteConnection;
-use tower_sessions::{
-    cookie::time::OffsetDateTime,
-    session::{Id, Record},
-    session_store, ExpiredDeletion, SessionStore,
+use {
+    crate::AppState,
+    async_trait::async_trait,
+    chrono::Utc,
+    sqlx::SqliteConnection,
+    tower_sessions::{
+        cookie::time::OffsetDateTime,
+        session::{Id, Record},
+        session_store, ExpiredDeletion, SessionStore,
+    },
 };
-
-use crate::AppState;
 
 #[async_trait]
 impl ExpiredDeletion for AppState {

@@ -1,12 +1,14 @@
-use crate::AppState;
-use axum::{
-    extract::Path,
-    http::{header, StatusCode},
-    response::{IntoResponse, Response},
-    routing::get,
-    Router,
+use {
+    crate::AppState,
+    axum::{
+        extract::Path,
+        http::{header, StatusCode},
+        response::{IntoResponse, Response},
+        routing::get,
+        Router,
+    },
+    include_dir::{include_dir, Dir},
 };
-use include_dir::{include_dir, Dir};
 
 static APP: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/../app/build/");
 

@@ -1,11 +1,13 @@
-use anyhow::anyhow;
-use axum::{
-    extract::Host,
-    http::{StatusCode, Uri},
-    response::{IntoResponse, Redirect, Response},
+use {
+    anyhow::anyhow,
+    axum::{
+        extract::Host,
+        http::{StatusCode, Uri},
+        response::{IntoResponse, Redirect, Response},
+    },
+    tracing::error,
+    url::Url,
 };
-use tracing::error;
-use url::Url;
 
 fn http_to_https(host: String, uri: Uri) -> Result<String, anyhow::Error> {
     let mut parts = uri.into_parts();

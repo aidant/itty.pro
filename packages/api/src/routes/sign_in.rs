@@ -1,20 +1,20 @@
-use axum::{
-    response::{IntoResponse, Redirect, Response},
-    Form,
+use {
+    super::AppState,
+    crate::store_user::UserCredentials,
+    axum::{
+        response::{IntoResponse, Redirect, Response},
+        Form,
+    },
+    axum_login::AuthSession,
+    hyper::StatusCode,
+    tracing::error,
 };
-use axum_login::AuthSession;
-use hyper::StatusCode;
-use tracing::error;
-
-use crate::util_auth::Credentials;
-
-use super::AppState;
 
 pub async fn post(
     mut auth_session: AuthSession<AppState>,
-    Form(creds): Form<Credentials>,
+    Form(credentials): Form<UserCredentials>,
 ) -> Response {
-    let user = match auth_session.authenticate(creds.clone()).await {
+    let user = match auth_session.authenticate(credentials.clone()).await {
         Ok(Some(user)) => user,
         Ok(None) => {
             return (StatusCode::UNAUTHORIZED).into_response();
@@ -26,6 +26,7 @@ pub async fn post(
     };
 
     if auth_session.login(&user).await.is_err() {
+        error!("login failed");
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     }
 

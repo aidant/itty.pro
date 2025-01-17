@@ -1,25 +1,27 @@
-use async_trait::async_trait;
-use axum::{extract::connect_info::IntoMakeServiceWithConnectInfo, Router};
-use hyper_util::{
-    rt::{TokioExecutor, TokioIo},
-    server::conn::auto::Builder,
-    service::TowerToHyperService,
-};
-use std::{io, net::SocketAddr, path::PathBuf, sync::Arc, time::Duration};
-use tokio::{
-    io::AsyncWriteExt,
-    net::{TcpListener, TcpStream},
-};
-use tokio_rustls::{
-    rustls::{
-        pki_types::{pem::PemObject, CertificateDer, PrivateKeyDer},
-        server::{Acceptor, ClientHello},
-        ServerConfig,
+use {
+    async_trait::async_trait,
+    axum::{extract::connect_info::IntoMakeServiceWithConnectInfo, Router},
+    hyper_util::{
+        rt::{TokioExecutor, TokioIo},
+        server::conn::auto::Builder,
+        service::TowerToHyperService,
     },
-    LazyConfigAcceptor,
+    std::{io, net::SocketAddr, path::PathBuf, sync::Arc, time::Duration},
+    tokio::{
+        io::AsyncWriteExt,
+        net::{TcpListener, TcpStream},
+    },
+    tokio_rustls::{
+        rustls::{
+            pki_types::{pem::PemObject, CertificateDer, PrivateKeyDer},
+            server::{Acceptor, ClientHello},
+            ServerConfig,
+        },
+        LazyConfigAcceptor,
+    },
+    tower_service::Service,
+    tracing::{error, trace},
 };
-use tower_service::Service;
-use tracing::{error, trace};
 
 #[async_trait]
 pub trait CertificateResolver: Send + Sync + Copy + 'static {

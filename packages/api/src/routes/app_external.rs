@@ -1,12 +1,14 @@
-use crate::AppState;
-use axum::{
-    extract::Path,
-    http::{self, header},
-    response::{IntoResponse, Response},
-    routing::get,
-    Router,
+use {
+    crate::AppState,
+    axum::{
+        extract::Path,
+        http::{self, header},
+        response::{IntoResponse, Response},
+        routing::get,
+        Router,
+    },
+    hyper::StatusCode,
 };
-use hyper::StatusCode;
 
 async fn serve(path: &str) -> Response {
     reqwest::get(format!("http://localhost:5173/app/{}", path))

@@ -1,29 +1,57 @@
-use axum::{
-    extract::MatchedPath,
-    http::{Request, StatusCode},
-    response::IntoResponse,
-    Json,
+use {
+    axum::{
+        extract::MatchedPath,
+        http::{Request, StatusCode},
+        response::IntoResponse,
+        Json,
+    },
+    axum_login::AuthManagerLayerBuilder,
+    resend_rs::Resend,
+    serde_json::json,
+    sqlx::SqlitePool,
+    std::{env, net::SocketAddr},
+    tokio::net::TcpListener,
+    tower_http::trace::TraceLayer,
+    tower_sessions::SessionManagerLayer,
+    tracing::info_span,
+    tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt},
+    util_https::{serve_http, serve_https, InsecureCertificateResolver},
 };
-use axum_login::AuthManagerLayerBuilder;
-use serde_json::json;
-use sqlx::SqlitePool;
-use std::{env, net::SocketAddr};
-use tokio::net::TcpListener;
-use tower_http::trace::TraceLayer;
-use tower_sessions::SessionManagerLayer;
-use tracing::info_span;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use util_https::{serve_http, serve_https, InsecureCertificateResolver};
 
 mod routes;
+mod store_user;
 mod util;
 mod util_auth;
 mod util_https;
 mod util_session;
+mod util_token;
+
+pub(crate) trait Database: Send + Sync {
+    fn conn(&self) -> &SqlitePool;
+}
+
+pub(crate) trait Email: Send + Sync {
+    fn email(&self) -> &Resend;
+}
 
 #[derive(Clone, Debug)]
 pub(crate) struct AppState {
     pub conn: SqlitePool,
+    pub email: Resend,
+}
+
+impl Database for AppState {
+    #[inline]
+    fn conn(&self) -> &SqlitePool {
+        &self.conn
+    }
+}
+
+impl Email for AppState {
+    #[inline]
+    fn email(&self) -> &Resend {
+        &self.email
+    }
 }
 
 pub(crate) struct AppError(anyhow::Error);
@@ -31,6 +59,7 @@ pub(crate) struct AppError(anyhow::Error);
 impl IntoResponse for AppError {
     fn into_response(self) -> axum::response::Response {
         tracing::debug!("{}", self.0);
+
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({ "error": "Internal server error" })),
@@ -69,7 +98,10 @@ async fn main() {
 
     sqlx::migrate!("./src/").run(&conn).await.unwrap();
 
-    let app_state = AppState { conn };
+    let app_state = AppState {
+        conn,
+        email: Resend::default(),
+    };
 
     let session_layer = SessionManagerLayer::new(app_state.clone())
         .with_same_site(tower_sessions::cookie::SameSite::None);

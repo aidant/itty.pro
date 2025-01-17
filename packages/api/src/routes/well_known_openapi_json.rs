@@ -1,10 +1,11 @@
-use super::api;
-
-use axum::{
-    response::{IntoResponse, Response},
-    Json,
+use {
+    super::api,
+    axum::{
+        response::{IntoResponse, Response},
+        Json,
+    },
+    utoipa::OpenApi,
 };
-use utoipa::OpenApi;
 
 #[derive(OpenApi)]
 #[openapi(paths(api::post, api::get))]

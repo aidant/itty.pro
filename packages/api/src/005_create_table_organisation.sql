@@ -1,10 +1,7 @@
-create table if not exists user (
+create table if not exists organisation (
     id blob not null,
 
     display_name text not null,
-    email text not null unique,
-    email_verified integer not null,
-    password text not null,
 
     created_at integer not null,
     updated_at integer not null,
