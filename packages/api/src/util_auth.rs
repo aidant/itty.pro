@@ -1,6 +1,6 @@
 use {
     crate::{
-        store_user::{User, UserCredentials, UserStoreExt},
+        store_user::{User, UserCredentials, UserError, UserStoreExt},
         AppState,
     },
     async_trait::async_trait,
@@ -24,19 +24,19 @@ impl AuthUser for User {
 impl AuthnBackend for AppState {
     type User = User;
     type Credentials = UserCredentials;
-    type Error = std::convert::Infallible;
+    type Error = UserError;
 
     async fn authenticate(
         &self,
         credentials: Self::Credentials,
     ) -> Result<Option<Self::User>, Self::Error> {
-        let user = self.get_user_by_credentials(credentials).await.unwrap();
+        let user = self.get_user_by_credentials(credentials).await?;
 
         Ok(user)
     }
 
     async fn get_user(&self, user_id: &UserId<Self>) -> Result<Option<Self::User>, Self::Error> {
-        let user = self.get_user_by_id(user_id).await.unwrap();
+        let user = self.get_user_by_id(user_id).await?;
 
         Ok(user)
     }

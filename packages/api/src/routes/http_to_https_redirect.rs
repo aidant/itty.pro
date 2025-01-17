@@ -1,15 +1,32 @@
 use {
-    anyhow::anyhow,
     axum::{
         extract::Host,
-        http::{StatusCode, Uri},
+        http::{
+            uri::{InvalidUri, InvalidUriParts},
+            StatusCode, Uri,
+        },
         response::{IntoResponse, Redirect, Response},
     },
+    thiserror::Error,
     tracing::error,
     url::Url,
 };
 
-fn http_to_https(host: String, uri: Uri) -> Result<String, anyhow::Error> {
+#[derive(Error, Debug)]
+pub enum HttpToHttpsError {
+    #[error(transparent)]
+    InvalidUri(#[from] InvalidUri),
+    #[error(transparent)]
+    InvalidUriParts(#[from] InvalidUriParts),
+    #[error(transparent)]
+    ParseError(#[from] url::ParseError),
+    #[error("unable to set scheme")]
+    Scheme,
+    #[error("unable to set port")]
+    Port,
+}
+
+fn http_to_https(host: String, uri: Uri) -> Result<String, HttpToHttpsError> {
     let mut parts = uri.into_parts();
 
     parts.scheme = Some(axum::http::uri::Scheme::HTTPS);
@@ -23,9 +40,9 @@ fn http_to_https(host: String, uri: Uri) -> Result<String, anyhow::Error> {
     let mut url = Url::parse(&Uri::from_parts(parts)?.to_string())?;
 
     url.set_scheme("https")
-        .map_err(|_| anyhow!("unable to set scheme"))?;
+        .map_err(|_| HttpToHttpsError::Scheme)?;
     url.set_port(Some(3000))
-        .map_err(|_| anyhow!("unable to set port"))?;
+        .map_err(|_| HttpToHttpsError::Port)?;
 
     Ok(url.to_string())
 }

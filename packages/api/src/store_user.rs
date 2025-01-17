@@ -1,9 +1,10 @@
 use {
-    crate::{util::uuid_to_datetime, util_token::Token, Database, Email},
+    crate::{util::uuid_and_datetime, util_token::Token, Database, Email},
     chrono::{DateTime, Duration, Utc},
     password_auth::{generate_hash, verify_password},
     resend_rs::types::CreateEmailBaseOptions,
     serde::Deserialize,
+    thiserror::Error,
     tokio::task,
     uuid::Uuid,
     veil::Redact,
@@ -43,15 +44,12 @@ pub struct User {
     pub updated_at: DateTime<Utc>,
 }
 
-impl TryFrom<NewUserCredentials> for User {
-    type Error = anyhow::Error;
-
-    fn try_from(value: NewUserCredentials) -> Result<Self, Self::Error> {
-        let id = Uuid::now_v7();
-        let now_datetime = uuid_to_datetime(&id)?;
+impl From<NewUserCredentials> for User {
+    fn from(value: NewUserCredentials) -> Self {
+        let (id, now_datetime) = uuid_and_datetime();
         let password_hash = generate_hash(value.password);
 
-        let user = User {
+        Self {
             id,
             display_name: value.display_name,
             email: value.email,
@@ -59,9 +57,7 @@ impl TryFrom<NewUserCredentials> for User {
             password: password_hash,
             created_at: now_datetime,
             updated_at: now_datetime,
-        };
-
-        Ok(user)
+        }
     }
 }
 
@@ -76,15 +72,12 @@ pub struct UserEmailVerification {
     updated_at: DateTime<Utc>,
 }
 
-impl TryFrom<&User> for UserEmailVerification {
-    type Error = anyhow::Error;
+impl From<&User> for UserEmailVerification {
+    fn from(user: &User) -> Self {
+        let (id, now_datetime) = uuid_and_datetime();
+        let token = Token::new();
 
-    fn try_from(user: &User) -> Result<Self, Self::Error> {
-        let id = Uuid::now_v7();
-        let now_datetime = uuid_to_datetime(&id)?;
-        let token = Token::new()?;
-
-        Ok(Self {
+        Self {
             id,
             user_id: user.id,
 
@@ -92,28 +85,38 @@ impl TryFrom<&User> for UserEmailVerification {
 
             created_at: now_datetime,
             updated_at: now_datetime,
-        })
+        }
     }
 }
 
 #[async_trait::async_trait]
 pub trait UserStoreExt {
-    async fn new_user(&self, credentials: NewUserCredentials) -> Result<User, anyhow::Error>;
-    async fn set_user_email_verified(&self, token: &str) -> Result<Option<User>, anyhow::Error>;
-    async fn get_user_by_id(&self, user_id: &Uuid) -> Result<Option<User>, anyhow::Error>;
+    async fn new_user(&self, credentials: NewUserCredentials) -> Result<User, UserError>;
+    async fn set_user_email_verified(&self, token: &str) -> Result<Option<User>, UserError>;
+    async fn get_user_by_id(&self, user_id: &Uuid) -> Result<Option<User>, UserError>;
     async fn get_user_by_credentials(
         &self,
         credentials: UserCredentials,
-    ) -> Result<Option<User>, anyhow::Error>;
+    ) -> Result<Option<User>, UserError>;
+}
+
+#[derive(Error, Debug)]
+pub enum UserError {
+    #[error(transparent)]
+    Sqlite(#[from] sqlx::Error),
+
+    #[error(transparent)]
+    Resend(#[from] resend_rs::Error),
+
+    #[error(transparent)]
+    TaskJoin(#[from] task::JoinError),
 }
 
 #[async_trait::async_trait]
 impl<AppState: Database + Email> UserStoreExt for AppState {
-    async fn new_user(&self, credentials: NewUserCredentials) -> Result<User, anyhow::Error> {
-        let user: User = task::spawn_blocking(|| credentials.try_into())
-            .await
-            .unwrap()?;
-        let user_email_verification: UserEmailVerification = (&user).try_into()?;
+    async fn new_user(&self, credentials: NewUserCredentials) -> Result<User, UserError> {
+        let user: User = task::spawn_blocking(|| credentials.into()).await?;
+        let user_email_verification: UserEmailVerification = (&user).into();
 
         let user_created_at = user.created_at.timestamp_millis();
         let user_updated_at = user.updated_at.timestamp_millis();
@@ -121,8 +124,6 @@ impl<AppState: Database + Email> UserStoreExt for AppState {
             user_email_verification.created_at.timestamp_millis();
         let user_email_verification_updated_at =
             user_email_verification.updated_at.timestamp_millis();
-
-        let mut tx = self.conn().begin().await?;
 
         sqlx::query!(
             r#"
@@ -136,7 +137,7 @@ impl<AppState: Database + Email> UserStoreExt for AppState {
             user_created_at,
             user_updated_at,
         )
-        .execute(&mut *tx)
+        .execute(self.conn())
         .await?;
 
         sqlx::query!(
@@ -149,10 +150,8 @@ impl<AppState: Database + Email> UserStoreExt for AppState {
             user_email_verification_created_at,
             user_email_verification_updated_at,
         )
-        .execute(&mut *tx)
+        .execute(self.conn())
         .await?;
-
-        tx.commit().await;
 
         self.email()
             .emails
@@ -175,8 +174,12 @@ impl<AppState: Database + Email> UserStoreExt for AppState {
         Ok(user)
     }
 
-    async fn set_user_email_verified(&self, token: &str) -> Result<Option<User>, anyhow::Error> {
-        let token: Token = token.parse()?;
+    async fn set_user_email_verified(&self, token: &str) -> Result<Option<User>, UserError> {
+        let token: Token = match token.parse() {
+            Ok(token) => token,
+            Err(_) => return Ok(None),
+        };
+
         let now_datetime = Utc::now();
         let ttl_datetime = now_datetime - Duration::hours(8);
 
@@ -231,7 +234,7 @@ impl<AppState: Database + Email> UserStoreExt for AppState {
         Ok(user)
     }
 
-    async fn get_user_by_id(&self, user_id: &Uuid) -> Result<Option<User>, anyhow::Error> {
+    async fn get_user_by_id(&self, user_id: &Uuid) -> Result<Option<User>, UserError> {
         let user = sqlx::query_as!(
             User,
             r#"
@@ -257,7 +260,7 @@ impl<AppState: Database + Email> UserStoreExt for AppState {
     async fn get_user_by_credentials(
         &self,
         credentials: UserCredentials,
-    ) -> Result<Option<User>, anyhow::Error> {
+    ) -> Result<Option<User>, UserError> {
         let user = sqlx::query_as!(
             User,
             r#"
@@ -280,7 +283,6 @@ impl<AppState: Database + Email> UserStoreExt for AppState {
         task::spawn_blocking(|| {
             Ok(user.filter(|user| verify_password(credentials.password, &user.password).is_ok()))
         })
-        .await
-        .unwrap()
+        .await?
     }
 }

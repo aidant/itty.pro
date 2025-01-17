@@ -1,5 +1,5 @@
 use {
-    getrandom::getrandom,
+    rand::{thread_rng, RngCore},
     sqlx::{sqlite::SqliteTypeInfo, Database, Decode, Encode, Sqlite, Type},
     std::{fmt::Display, str::FromStr},
     veil::Redact,
@@ -29,10 +29,10 @@ impl Type<Sqlite> for Token {
 pub struct Token(#[redact(display, partial)] TokenInner);
 
 impl Token {
-    pub fn new() -> Result<Self, getrandom::Error> {
-        let mut buf = [0u8; 64];
-        getrandom(&mut buf)?;
-        Ok(Self(TokenInner(buf.into())))
+    pub fn new() -> Self {
+        let mut data = [0u8; 64];
+        thread_rng().fill_bytes(&mut data);
+        Self(TokenInner(data.into()))
     }
 }
 
