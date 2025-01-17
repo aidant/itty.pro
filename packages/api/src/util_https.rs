@@ -138,7 +138,7 @@ impl CertificateResolver for InsecureCertificateResolver {
 
     async fn resolve(
         &self,
-        client_hello: &ClientHello<'_>,
+        _client_hello: &ClientHello<'_>,
     ) -> Result<Arc<ServerConfig>, Self::Error> {
         let mut config = ServerConfig::builder()
             .with_no_client_auth()

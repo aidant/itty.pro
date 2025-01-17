@@ -5,15 +5,7 @@ use {
         extract::{Path, State},
         response::{IntoResponse, Redirect, Response},
     },
-    serde::Deserialize,
 };
-
-#[derive(Clone, Deserialize)]
-pub struct Credentials {
-    pub display_name: String,
-    pub email: String,
-    pub password: String,
-}
 
 pub async fn post(
     Path(token): Path<String>,

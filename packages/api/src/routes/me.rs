@@ -8,7 +8,7 @@ use {
     serde_json::json,
 };
 
-pub async fn get(mut auth_session: AuthSession<AppState>) -> Response {
+pub async fn get(auth_session: AuthSession<AppState>) -> Response {
     match auth_session.user {
         None => Json(json!({ "data": null })).into_response(),
         Some(user) => {

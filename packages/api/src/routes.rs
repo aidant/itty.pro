@@ -12,7 +12,9 @@ use {
 };
 
 mod api;
+#[cfg(feature = "app_external")]
 mod app_external;
+#[cfg(feature = "app_internal")]
 mod app_internal;
 mod http_to_https_redirect;
 mod me;

@@ -20,11 +20,11 @@ use {
 
 mod routes;
 mod store_user;
-mod util;
 mod util_auth;
 mod util_https;
 mod util_session;
 mod util_token;
+mod util_uuid;
 
 pub(crate) trait Database: Send + Sync {
     fn conn(&self) -> &SqlitePool;

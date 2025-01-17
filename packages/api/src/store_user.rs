@@ -1,5 +1,5 @@
 use {
-    crate::{util::uuid_and_datetime, util_token::Token, Database, Email},
+    crate::{util_token::Token, util_uuid::uuid_and_ts, Database, Email},
     chrono::{DateTime, Duration, Utc},
     password_auth::{generate_hash, verify_password},
     resend_rs::types::CreateEmailBaseOptions,
@@ -46,7 +46,7 @@ pub struct User {
 
 impl From<NewUserCredentials> for User {
     fn from(value: NewUserCredentials) -> Self {
-        let (id, now_datetime) = uuid_and_datetime();
+        let (id, now_ts) = uuid_and_ts();
         let password_hash = generate_hash(value.password);
 
         Self {
@@ -55,8 +55,8 @@ impl From<NewUserCredentials> for User {
             email: value.email,
             email_verified: false,
             password: password_hash,
-            created_at: now_datetime,
-            updated_at: now_datetime,
+            created_at: now_ts,
+            updated_at: now_ts,
         }
     }
 }
@@ -74,7 +74,7 @@ pub struct UserEmailVerification {
 
 impl From<&User> for UserEmailVerification {
     fn from(user: &User) -> Self {
-        let (id, now_datetime) = uuid_and_datetime();
+        let (id, now_ts) = uuid_and_ts();
         let token = Token::new();
 
         Self {
@@ -83,8 +83,8 @@ impl From<&User> for UserEmailVerification {
 
             token,
 
-            created_at: now_datetime,
-            updated_at: now_datetime,
+            created_at: now_ts,
+            updated_at: now_ts,
         }
     }
 }
@@ -180,10 +180,10 @@ impl<AppState: Database + Email> UserStoreExt for AppState {
             Err(_) => return Ok(None),
         };
 
-        let now_datetime = Utc::now();
-        let ttl_datetime = now_datetime - Duration::hours(8);
+        let now_ts = Utc::now();
+        let ttl_datetime = now_ts - Duration::hours(8);
 
-        let now_ms = now_datetime.timestamp_millis();
+        let now_ms = now_ts.timestamp_millis();
         let ttl_ms = ttl_datetime.timestamp_millis();
 
         let mut tx = self.conn().begin().await?;
@@ -229,7 +229,7 @@ impl<AppState: Database + Email> UserStoreExt for AppState {
         .execute(&mut *tx)
         .await?;
 
-        tx.commit().await;
+        tx.commit().await?;
 
         Ok(user)
     }

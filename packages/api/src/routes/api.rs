@@ -1,6 +1,6 @@
 use {
     super::AppState,
-    crate::{util::uuid_to_ms, AppError},
+    crate::{util_uuid::uuid_and_ts, AppError},
     axum::{
         extract::{ConnectInfo, Host, Path, State},
         http::StatusCode,
@@ -40,9 +40,9 @@ pub async fn post(
         }
     };
 
-    let id = Uuid::now_v7();
+    let (id, now_ts) = uuid_and_ts();
+    let now_ms = now_ts.timestamp_millis();
     let key = path.unwrap_or_else(|| nanoid!(8));
-    let now_ms = uuid_to_ms(&id)?;
 
     let url_string = match Url::parse(&payload) {
         Ok(url) => url.to_string(),
@@ -100,8 +100,8 @@ pub async fn get(
     .await?;
 
     if let Some(row) = row {
-        let id = Uuid::now_v7();
-        let now_ms = uuid_to_ms(&id)?;
+        let (id, now_ts) = uuid_and_ts();
+        let now_ms = now_ts.timestamp_millis();
 
         let req_client_ip = addr.to_string();
         let req_user_agent = user_agent.to_string();
