@@ -31,6 +31,15 @@ use app_external as app;
 #[cfg(feature = "app_internal")]
 use app_internal as app;
 
+#[cfg(not(any(feature = "app_internal", feature = "app_external")))]
+mod app {
+    use super::*;
+
+    pub fn router() -> Router<AppState> {
+        Router::new()
+    }
+}
+
 pub struct AppRouter {}
 
 const COUNTER_KEY: &str = "counter";
