@@ -1,6 +1,7 @@
 use {
     crate::{
-        store_user::{User, UserCredentials, UserError, UserStoreExt},
+        store_user::{User, UserCredentials, UserStoreExt},
+        util_app_error::InternalServerError,
         AppState,
     },
     async_trait::async_trait,
@@ -24,7 +25,7 @@ impl AuthUser for User {
 impl AuthnBackend for AppState {
     type User = User;
     type Credentials = UserCredentials;
-    type Error = UserError;
+    type Error = InternalServerError;
 
     async fn authenticate(
         &self,

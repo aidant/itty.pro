@@ -1,17 +1,26 @@
 use {
     super::AppState,
-    axum::response::{IntoResponse, Redirect, Response},
+    crate::util_app_error::{AppError, InternalServerError},
+    axum::response::{IntoResponse, Response},
     axum_login::AuthSession,
     hyper::StatusCode,
-    tracing::error,
 };
 
-pub async fn post(mut auth_session: AuthSession<AppState>) -> Response {
-    match auth_session.logout().await {
-        Ok(_) => Redirect::to("/app").into_response(),
-        Err(err) => {
-            error!("{:?}", err);
-            (StatusCode::INTERNAL_SERVER_ERROR).into_response()
-        }
-    }
+#[utoipa::path(
+    post,
+    path = "/api/sign-out",
+    operation_id = "sign_out",
+    tag = "auth",
+    responses(
+        (status = 200),
+        (status = 500, body = AppError)
+    )
+)]
+pub async fn post(mut auth_session: AuthSession<AppState>) -> Result<Response, AppError> {
+    auth_session
+        .logout()
+        .await
+        .map_err(|err| InternalServerError(err.into()))?;
+
+    Ok(StatusCode::OK.into_response())
 }

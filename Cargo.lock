@@ -2007,9 +2007,8 @@ dependencies = [
 
 [[package]]
 name = "resend-rs"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "06621c8e929079050b6f2c9e3a5eaaa6b98bb9dcc3a50422c2dbab447bd4d080"
+version = "0.11.1"
+source = "git+https://github.com/resend/resend-rust.git?rev=5a18f005a6b5401500185a13b364adfc057d6b01#5a18f005a6b5401500185a13b364adfc057d6b01"
 dependencies = [
  "ecow",
  "governor",

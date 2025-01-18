@@ -1,19 +1,21 @@
 use {
     super::AppState,
+    crate::{store_user::User, util_app_error::AppError},
     axum::{
         response::{IntoResponse, Response},
         Json,
     },
     axum_login::AuthSession,
-    serde_json::json,
 };
 
+#[utoipa::path(
+    get,
+    path = "/api/@me",
+    responses(
+        (status = 200, body = Option<User>),
+        (status = 500, body = AppError)
+    )
+)]
 pub async fn get(auth_session: AuthSession<AppState>) -> Response {
-    match auth_session.user {
-        None => Json(json!({ "data": null })).into_response(),
-        Some(user) => {
-            Json(json!({ "data": { "display_name": user.display_name, "email": user.email, "email_verified": user.email_verified } }))
-                .into_response()
-        }
-    }
+    Json(auth_session.user).into_response()
 }

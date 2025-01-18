@@ -1,81 +1,25 @@
 use {
-    axum::{
-        extract::MatchedPath,
-        http::{Request, StatusCode},
-        response::IntoResponse,
-        Json,
-    },
+    axum::{extract::MatchedPath, http::Request},
     axum_login::AuthManagerLayerBuilder,
-    resend_rs::Resend,
-    serde_json::json,
-    sqlx::SqlitePool,
     std::{env, net::SocketAddr},
     tokio::net::TcpListener,
     tower_http::trace::TraceLayer,
     tower_sessions::SessionManagerLayer,
     tracing::info_span,
     tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt},
+    util_app_state::AppState,
     util_https::{serve_http, serve_https, InsecureCertificateResolver},
 };
 
 mod routes;
 mod store_user;
+mod util_app_error;
+mod util_app_state;
 mod util_auth;
 mod util_https;
 mod util_session;
 mod util_token;
 mod util_uuid;
-
-pub(crate) trait Database: Send + Sync {
-    fn conn(&self) -> &SqlitePool;
-}
-
-pub(crate) trait Email: Send + Sync {
-    fn email(&self) -> &Resend;
-}
-
-#[derive(Clone, Debug)]
-pub(crate) struct AppState {
-    pub conn: SqlitePool,
-    pub email: Resend,
-}
-
-impl Database for AppState {
-    #[inline]
-    fn conn(&self) -> &SqlitePool {
-        &self.conn
-    }
-}
-
-impl Email for AppState {
-    #[inline]
-    fn email(&self) -> &Resend {
-        &self.email
-    }
-}
-
-pub(crate) struct AppError(anyhow::Error);
-
-impl IntoResponse for AppError {
-    fn into_response(self) -> axum::response::Response {
-        tracing::debug!("{}", self.0);
-
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "error": "Internal server error" })),
-        )
-            .into_response()
-    }
-}
-
-impl<E> From<E> for AppError
-where
-    E: Into<anyhow::Error>,
-{
-    fn from(error: E) -> Self {
-        Self(error.into())
-    }
-}
 
 #[tokio::main]
 async fn main() {
@@ -92,16 +36,7 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let conn = SqlitePool::connect(&env::var("DATABASE_URL").unwrap())
-        .await
-        .unwrap();
-
-    sqlx::migrate!("./src/").run(&conn).await.unwrap();
-
-    let app_state = AppState {
-        conn,
-        email: Resend::default(),
-    };
+    let app_state = AppState::new().await;
 
     let session_layer = SessionManagerLayer::new(app_state.clone())
         .with_same_site(tower_sessions::cookie::SameSite::None);

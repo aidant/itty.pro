@@ -1,16 +1,24 @@
 use {
-    crate::{util_token::Token, util_uuid::uuid_and_ts, Database, Email},
+    crate::{
+        util_app_error::InternalServerError,
+        util_app_state::{Database, Email},
+        util_token::Token,
+        util_uuid::uuid_and_ts,
+    },
+    axum::{response::IntoResponse, Json},
     chrono::{DateTime, Duration, Utc},
+    hyper::StatusCode,
     password_auth::{generate_hash, verify_password},
     resend_rs::types::CreateEmailBaseOptions,
-    serde::Deserialize,
+    serde::{Deserialize, Serialize},
     thiserror::Error,
     tokio::task,
+    utoipa::ToSchema,
     uuid::Uuid,
     veil::Redact,
 };
 
-#[derive(Redact, Clone, Deserialize)]
+#[derive(Redact, Clone, Deserialize, ToSchema)]
 pub struct NewUserCredentials {
     #[redact(partial)]
     pub display_name: String,
@@ -20,7 +28,7 @@ pub struct NewUserCredentials {
     pub password: String,
 }
 
-#[derive(Redact, Clone, Deserialize)]
+#[derive(Redact, Clone, Deserialize, ToSchema)]
 pub struct UserCredentials {
     #[redact(partial)]
     pub email: String,
@@ -28,8 +36,9 @@ pub struct UserCredentials {
     pub password: String,
 }
 
-#[derive(Redact, Clone)]
+#[derive(Redact, Clone, Serialize, ToSchema)]
 pub struct User {
+    #[serde(skip_serializing)]
     pub id: Uuid,
 
     #[redact(partial)]
@@ -38,9 +47,12 @@ pub struct User {
     pub email: String,
     pub email_verified: bool,
     #[redact]
+    #[serde(skip_serializing)]
     pub password: String,
 
+    #[serde(skip_serializing)]
     pub created_at: DateTime<Utc>,
+    #[serde(skip_serializing)]
     pub updated_at: DateTime<Utc>,
 }
 
@@ -89,33 +101,57 @@ impl From<&User> for UserEmailVerification {
     }
 }
 
+#[derive(Error, Debug, Serialize, ToSchema)]
+#[serde(tag = "error", rename_all = "snake_case")]
+pub enum NewUserError {
+    #[error("account exists")]
+    AccountExists,
+    #[error("invalid email")]
+    InvalidEmail,
+    #[error(transparent)]
+    InternalServerError {
+        #[serde(skip)]
+        #[from]
+        error: anyhow::Error,
+    },
+}
+
+impl Into<StatusCode> for &NewUserError {
+    fn into(self) -> StatusCode {
+        match self {
+            NewUserError::AccountExists => StatusCode::UNPROCESSABLE_ENTITY,
+            NewUserError::InvalidEmail => StatusCode::UNPROCESSABLE_ENTITY,
+            NewUserError::InternalServerError { error: _ } => StatusCode::INTERNAL_SERVER_ERROR,
+        }
+    }
+}
+
+impl IntoResponse for NewUserError {
+    fn into_response(self) -> axum::response::Response {
+        (Into::<StatusCode>::into(&self), Json(self)).into_response()
+    }
+}
+
 #[async_trait::async_trait]
 pub trait UserStoreExt {
-    async fn new_user(&self, credentials: NewUserCredentials) -> Result<User, UserError>;
-    async fn set_user_email_verified(&self, token: &str) -> Result<Option<User>, UserError>;
-    async fn get_user_by_id(&self, user_id: &Uuid) -> Result<Option<User>, UserError>;
+    async fn new_user(&self, credentials: NewUserCredentials) -> Result<User, NewUserError>;
+    async fn set_user_email_verified(
+        &self,
+        token: &str,
+    ) -> Result<Option<User>, InternalServerError>;
+    async fn get_user_by_id(&self, user_id: &Uuid) -> Result<Option<User>, InternalServerError>;
     async fn get_user_by_credentials(
         &self,
         credentials: UserCredentials,
-    ) -> Result<Option<User>, UserError>;
-}
-
-#[derive(Error, Debug)]
-pub enum UserError {
-    #[error(transparent)]
-    Sqlite(#[from] sqlx::Error),
-
-    #[error(transparent)]
-    Resend(#[from] resend_rs::Error),
-
-    #[error(transparent)]
-    TaskJoin(#[from] task::JoinError),
+    ) -> Result<Option<User>, InternalServerError>;
 }
 
 #[async_trait::async_trait]
 impl<AppState: Database + Email> UserStoreExt for AppState {
-    async fn new_user(&self, credentials: NewUserCredentials) -> Result<User, UserError> {
-        let user: User = task::spawn_blocking(|| credentials.into()).await?;
+    async fn new_user(&self, credentials: NewUserCredentials) -> Result<User, NewUserError> {
+        let user: User = task::spawn_blocking(|| credentials.into())
+            .await
+            .map_err(anyhow::Error::new)?;
         let user_email_verification: UserEmailVerification = (&user).into();
 
         let user_created_at = user.created_at.timestamp_millis();
@@ -125,9 +161,11 @@ impl<AppState: Database + Email> UserStoreExt for AppState {
         let user_email_verification_updated_at =
             user_email_verification.updated_at.timestamp_millis();
 
+        let mut tx = self.conn().begin().await.map_err(anyhow::Error::new)?;
+
         sqlx::query!(
             r#"
-                insert or rollback into user (id, display_name, email, email_verified, password, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?)
+                insert into user (id, display_name, email, email_verified, password, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?)
             "#,
             user.id,
             user.display_name,
@@ -137,12 +175,16 @@ impl<AppState: Database + Email> UserStoreExt for AppState {
             user_created_at,
             user_updated_at,
         )
-        .execute(self.conn())
-        .await?;
+        .execute(&mut *tx)
+        .await
+        .map_err(|err| match err {
+            sqlx::Error::Database(err) if err.is_unique_violation() => NewUserError::AccountExists,
+            _ => NewUserError::InternalServerError { error: err.into() }
+        })?;
 
         sqlx::query!(
             r#"
-                insert or rollback into user_email_verification (id, user_id, token, created_at, updated_at) values (?, ?, ?, ?, ?)
+                insert into user_email_verification (id, user_id, token, created_at, updated_at) values (?, ?, ?, ?, ?)
             "#,
             user_email_verification.id,
             user_email_verification.user_id,
@@ -150,10 +192,12 @@ impl<AppState: Database + Email> UserStoreExt for AppState {
             user_email_verification_created_at,
             user_email_verification_updated_at,
         )
-        .execute(self.conn())
-        .await?;
+        .execute(&mut *tx)
+        .await
+        .map_err(anyhow::Error::new)?;
 
-        self.email()
+        let email_err = self
+            .email()
             .emails
             .send(
                 CreateEmailBaseOptions::new(
@@ -169,12 +213,32 @@ impl<AppState: Database + Email> UserStoreExt for AppState {
                     .as_str(),
                 ),
             )
-            .await?;
+            .await
+            .map_err(|err| match err {
+                resend_rs::Error::Resend(error_response)
+                    if error_response.kind() == resend_rs::types::ErrorKind::InvalidToAddress =>
+                {
+                    NewUserError::InvalidEmail
+                }
+                _ => NewUserError::InternalServerError { error: err.into() },
+            })
+            .err();
+
+        match email_err {
+            Some(NewUserError::InvalidEmail) => {
+                let _ = tx.rollback().await;
+                return Err(NewUserError::InvalidEmail);
+            }
+            _ => tx.commit().await.map_err(anyhow::Error::new)?,
+        }
 
         Ok(user)
     }
 
-    async fn set_user_email_verified(&self, token: &str) -> Result<Option<User>, UserError> {
+    async fn set_user_email_verified(
+        &self,
+        token: &str,
+    ) -> Result<Option<User>, InternalServerError> {
         let token: Token = match token.parse() {
             Ok(token) => token,
             Err(_) => return Ok(None),
@@ -186,7 +250,7 @@ impl<AppState: Database + Email> UserStoreExt for AppState {
         let now_ms = now_ts.timestamp_millis();
         let ttl_ms = ttl_datetime.timestamp_millis();
 
-        let mut tx = self.conn().begin().await?;
+        let mut tx = self.conn().begin().await.map_err(anyhow::Error::new)?;
 
         sqlx::query!(
             r#"
@@ -195,7 +259,8 @@ impl<AppState: Database + Email> UserStoreExt for AppState {
             ttl_ms,
         )
         .execute(&mut *tx)
-        .await?;
+        .await
+        .map_err(anyhow::Error::new)?;
 
         let user = sqlx::query_as!(
             User,
@@ -217,7 +282,8 @@ impl<AppState: Database + Email> UserStoreExt for AppState {
             token,
         )
         .fetch_optional(&mut *tx)
-        .await?;
+        .await
+        .map_err(anyhow::Error::new)?;
 
         sqlx::query_as!(
             User,
@@ -227,14 +293,15 @@ impl<AppState: Database + Email> UserStoreExt for AppState {
             token,
         )
         .execute(&mut *tx)
-        .await?;
+        .await
+        .map_err(anyhow::Error::new)?;
 
-        tx.commit().await?;
+        tx.commit().await.map_err(anyhow::Error::new)?;
 
         Ok(user)
     }
 
-    async fn get_user_by_id(&self, user_id: &Uuid) -> Result<Option<User>, UserError> {
+    async fn get_user_by_id(&self, user_id: &Uuid) -> Result<Option<User>, InternalServerError> {
         let user = sqlx::query_as!(
             User,
             r#"
@@ -252,7 +319,8 @@ impl<AppState: Database + Email> UserStoreExt for AppState {
             user_id
         )
         .fetch_optional(self.conn())
-        .await?;
+        .await
+        .map_err(anyhow::Error::new)?;
 
         Ok(user)
     }
@@ -260,7 +328,7 @@ impl<AppState: Database + Email> UserStoreExt for AppState {
     async fn get_user_by_credentials(
         &self,
         credentials: UserCredentials,
-    ) -> Result<Option<User>, UserError> {
+    ) -> Result<Option<User>, InternalServerError> {
         let user = sqlx::query_as!(
             User,
             r#"
@@ -278,11 +346,13 @@ impl<AppState: Database + Email> UserStoreExt for AppState {
             credentials.email
         )
         .fetch_optional(self.conn())
-        .await?;
+        .await
+        .map_err(anyhow::Error::new)?;
 
         task::spawn_blocking(|| {
             Ok(user.filter(|user| verify_password(credentials.password, &user.password).is_ok()))
         })
-        .await?
+        .await
+        .map_err(anyhow::Error::new)?
     }
 }

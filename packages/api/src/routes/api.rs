@@ -1,6 +1,9 @@
 use {
     super::AppState,
-    crate::{util_uuid::uuid_and_ts, AppError},
+    crate::{
+        util_app_error::{AppError, InternalServerError},
+        util_uuid::uuid_and_ts,
+    },
     axum::{
         extract::{ConnectInfo, Host, Path, State},
         http::StatusCode,
@@ -66,11 +69,16 @@ pub async fn post(
         now_ms,
     )
     .execute(&state.conn)
-    .await?;
+    .await
+    .map_err(anyhow::Error::new)
+    .map_err(InternalServerError)?;
 
     Ok((
         StatusCode::CREATED,
-        Url::parse(&format!("https://{host}:3000/{key}"))?.to_string(),
+        Url::parse(&format!("https://{host}:3000/{key}"))
+            .map_err(anyhow::Error::new)
+            .map_err(InternalServerError)?
+            .to_string(),
     )
         .into_response())
 }
@@ -97,7 +105,9 @@ pub async fn get(
         key
     )
     .fetch_optional(&state.conn)
-    .await?;
+    .await
+    .map_err(anyhow::Error::new)
+    .map_err(InternalServerError)?;
 
     if let Some(row) = row {
         let (id, now_ts) = uuid_and_ts();
@@ -118,7 +128,9 @@ pub async fn get(
             now_ms,
         )
         .execute(&state.conn)
-        .await?;
+        .await
+        .map_err(anyhow::Error::new)
+        .map_err(InternalServerError)?;
 
         Ok((StatusCode::TEMPORARY_REDIRECT, [("Location", row.url)]).into_response())
     } else {

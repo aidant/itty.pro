@@ -1,11 +1,18 @@
 <script lang="ts">
 	import { page } from '$app/stores';
+	import { signOut, user$ } from '$lib/api.svelte';
 	import '@fontsource-variable/playfair-display';
 	import '@fontsource/atkinson-hyperlegible';
 	import '../app.css';
-	import type { PageData } from './$types';
 
-	let { data, children }: { data: PageData; children: Function } = $props();
+	let { children }: { children: Function } = $props();
+
+	let disableSignOut = $state(false);
+	const handleSignOut = async () => {
+		disableSignOut = true;
+		await signOut();
+		disableSignOut = false;
+	};
 </script>
 
 {#snippet signIn()}
@@ -26,19 +33,11 @@
 			<li class="line-through">Features</li>
 			<li class="line-through">Pricing</li>
 			<li>
-				{#await data.user}
+				{#if user$()}
+					<button onclick={handleSignOut} class="cursor-pointer">Sign out</button>
+				{:else}
 					{@render signIn()}
-				{:then user}
-					{#if user.data}
-						<form method="POST" action="/api/sign-out">
-							<button type="submit">Sign out</button>
-						</form>
-					{:else}
-						{@render signIn()}
-					{/if}
-				{:catch}
-					{@render signIn()}
-				{/await}
+				{/if}
 			</li>
 		</ul>
 	</nav>
